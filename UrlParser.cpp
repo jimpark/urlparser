@@ -51,17 +51,18 @@ namespace urlparser {
             auto parseUser = Capture(user, OoM(Not(ChSet<char>({':', '@'})))) +
                              ZoO(Ch(':') + Capture(password, OoM(Not(Ch('@'))))) + Ch('@');
             auto parsePort = Ch(':') + Capture(port, OoM(d<char>()));
-            auto parseHost = Capture(host, OoM(Not(ChSet<char>({'/', ':'}))));
+            auto parseHost = Capture(host, OoM(Not(ChSet<char>({'/', ':', '?', '#'}))));
 
             auto parsePathElement = OoM(Not(ChSet<char>({'/', '#', '?'})));
-            auto parsePath = Capture(path, parsePathElement + ZoM(Ch('/') + parsePathElement) + ZoO(Ch('/')));
+            auto parsePath = Ch('/') + Capture(path, ZoM((parsePathElement + Ch('/')) | parsePathElement) + ZoO(Ch('/')));
 
-            auto parseQuery = (OoM(Not(ChSet<char>({'=', '&', '#'})))) |
-                              (OoM(Not(Ch('='))) + Ch('=') + OoM(Not(ChSet<char>({'&', '#'}))));
+            auto parseQuery = (OoM(Not(Ch('='))) + Ch('=') + OoM(Not(ChSet<char>({'&', '#'})))) |
+                              (OoM(Not(ChSet<char>({'=', '&', '#'}))));
             auto parseQueryList = Ch('?') + Capture(queries, parseQuery + ZoM(Ch('&') + parseQuery));
 
-            auto parseUrl = parseProtocol + ZoO(parseUser) + parseHost + ZoO(parsePort) + ZoO(Ch('/')) +
-                                   ZoO(parsePath) + ZoO(parseQueryList) + End<char>();
+            auto parseRef = Ch('#') + Capture(reference, OoM(any<char>()));
+            auto parseUrl = parseProtocol + ZoO(parseUser) + parseHost + ZoO(parsePort) +
+                                   ZoO(parsePath) + ZoO(parseQueryList) + ZoO(parseRef) + End<char>();
             return parseUrl;
         }();
 
@@ -124,6 +125,7 @@ namespace urlparser {
                     }
                     break;
             }
+            ++i;
         }
 
         if (!key.empty()) {
