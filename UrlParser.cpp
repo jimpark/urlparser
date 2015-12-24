@@ -8,6 +8,7 @@
 namespace urlparser {
     using namespace std;
     using namespace parse;
+    using namespace parse::u8;
 
     UrlData::UrlData()
             : port(-1) {
@@ -47,22 +48,22 @@ namespace urlparser {
 
     UrlParser::UrlParser() {
         static auto p_ = [=](){
-            auto parseProtocol = Capture(protocol, OoM(w<char>())) + Str("://");
-            auto parseUser = Capture(user, OoM(Not(ChSet<char>({':', '@'})))) +
-                             ZoO(Ch(':') + Capture(password, OoM(Not(Ch('@'))))) + Ch('@');
-            auto parsePort = Ch(':') + Capture(port, OoM(d<char>()));
-            auto parseHost = Capture(host, OoM(Not(ChSet<char>({'/', ':', '?', '#'}))));
+            auto parseProtocol = Capture(protocol, OoM(w())) + str("://");
+            auto parseUser = Capture(user, OoM(!(cs({':', '@'})))) +
+                             ZoO(c(':') + Capture(password, OoM(!(c('@'))))) + c('@');
+            auto parsePort = c(':') + Capture(port, OoM(d()));
+            auto parseHost = Capture(host, OoM(!(cs({'/', ':', '?', '#'}))));
 
-            auto parsePathElement = OoM(Not(ChSet<char>({'/', '#', '?'})));
-            auto parsePath = Ch('/') + Capture(path, ZoM((parsePathElement + Ch('/')) | parsePathElement) + ZoO(Ch('/')));
+            auto parsePathElement = OoM(!(cs({'/', '#', '?'})));
+            auto parsePath = c('/') + Capture(path, ZoM((parsePathElement + c('/')) | parsePathElement) + ZoO(c('/')));
 
-            auto parseQuery = (OoM(Not(Ch('='))) + Ch('=') + OoM(Not(ChSet<char>({'&', '#'})))) |
-                              (OoM(Not(ChSet<char>({'=', '&', '#'}))));
-            auto parseQueryList = Ch('?') + Capture(queries, parseQuery + ZoM(Ch('&') + parseQuery));
+            auto parseQuery = (OoM(!(c('='))) + c('=') + OoM(!(cs({'&', '#'})))) |
+                              (OoM(!(cs({'=', '&', '#'}))));
+            auto parseQueryList = c('?') + Capture(queries, parseQuery + ZoM(c('&') + parseQuery));
 
-            auto parseRef = Ch('#') + Capture(reference, OoM(any<char>()));
+            auto parseRef = c('#') + Capture(reference, OoM(any()));
             auto parseUrl = parseProtocol + ZoO(parseUser) + parseHost + ZoO(parsePort) +
-                                   ZoO(parsePath) + ZoO(parseQueryList) + ZoO(parseRef) + End<char>();
+                                   ZoO(parsePath) + ZoO(parseQueryList) + ZoO(parseRef) + stop();
             return parseUrl;
         }();
 
@@ -74,7 +75,6 @@ namespace urlparser {
     }
 
     bool UrlParser::parse(it i, it end, UrlData &data) {
-        urlParser->reset();
         if ((*urlParser)(i, end)) {
             data.protocol = protocol;
             data.host = host;

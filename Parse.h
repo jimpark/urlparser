@@ -30,7 +30,7 @@ namespace parse {
         virtual ~Node() { }
 
         virtual bool operator()(
-                iterT &begin, iterT end) = 0;
+                iterT &begin, iterT end, bool test = false) = 0;
 
         virtual void setMatchCallback(mfT f) { mf_ = std::move(f); }
 
@@ -38,28 +38,26 @@ namespace parse {
             mf_(strT{begin, end});
         }
 
-        virtual void reset() {
-            mf_(strT{});
-        }
-
     protected:
         mfT mf_;
     };
 
     template<typename C>
-    class End : public Node<C> {
+    class Stop : public Node<C> {
     public:
         using strT = std::basic_string<C>;
         using iterT = typename strT::const_iterator;
         using matchT = std::function<bool(C)>;
         using charT = C;
 
-        virtual ~End() { }
+        virtual ~Stop() { }
 
         virtual bool operator()(
-                iterT &begin, iterT end) override {
+                iterT &begin, iterT end, bool test = false) override {
             if (begin == end) {
-                Node<C>::onMatch(begin, end);
+                if (!test) {
+                    Node<C>::onMatch(begin, end);
+                }
                 return true;
             }
             return false;
@@ -80,10 +78,12 @@ namespace parse {
         virtual ~LitC() { }
 
         virtual bool operator()(
-                iterT &begin, iterT end) override {
+                iterT &begin, iterT end, bool test = false) override {
             if (begin == end) return false;
             if (m_(*begin)) {
-                Node<C>::onMatch(begin, begin+1);
+                if (!test) {
+                    Node<C>::onMatch(begin, begin + 1);
+                }
                 ++begin;
                 return true;
             }
@@ -118,18 +118,19 @@ namespace parse {
             if (x >= a && x <= b) {
                 return true;
             }
+            return false;
         });
     }
 
     template<typename C>
-    LitC<C> s() {
+    LitC<C> Space() {
         return LitC<C>([](C x) {
             return (x == ' ' || x == '\t' || x == '\r' || x == '\n');
         });
     }
 
     template<typename C>
-    LitC<C> w() {
+    LitC<C> Word() {
         return LitC<C>([](C x) {
             return ((x >= '0' && x <= '9') ||
                     (x >= 'a' && x <= 'z') ||
@@ -139,14 +140,14 @@ namespace parse {
     }
 
     template<typename C>
-    LitC<C> d() {
+    LitC<C> Digit() {
         return LitC<C>([](C x) {
             return (x >= '0' && x <= '9');
         });
     }
 
     template<typename C>
-    LitC<C> any() {
+    LitC<C> Any() {
         return LitC<C>([](C x) { return true; });
     }
 
@@ -170,7 +171,7 @@ namespace parse {
         virtual ~LitS() { }
 
         virtual bool operator()(
-                iterT &begin, iterT end) override {
+                iterT &begin, iterT end, bool test = false) override {
             if (s_.size() > (end - begin)) return false;
             auto i = begin;
             auto j = std::begin(s_);
@@ -180,7 +181,9 @@ namespace parse {
                 ++j;
                 ++i;
             }
-            Node<C>::onMatch(begin, i);
+            if (!test) {
+                Node<C>::onMatch(begin, i);
+            }
             begin = i;
             return true;
         }
@@ -212,26 +215,20 @@ namespace parse {
         virtual ~Or() { }
 
         virtual bool operator()(
-                iterT &begin, iterT end) override {
+                iterT &begin, iterT end, bool test = false) override {
 
             auto i = begin;
             if (!a_(i, end)) {
                 i = begin;
-                a_.reset();
                 if (!b_(i, end)) {
-                    b_.reset();
                     return false;
                 }
             }
-            Node<C>::onMatch(begin, i);
+            if (!test) {
+                Node<C>::onMatch(begin, i);
+            }
             begin = i;
             return true;
-        }
-
-        virtual void reset() override {
-            Node<C>::reset();
-            a_.reset();
-            b_.reset();
         }
 
     private:
@@ -257,22 +254,17 @@ namespace parse {
         virtual ~And() { }
 
         virtual bool operator()(
-                iterT &begin, iterT end) override {
+                iterT &begin, iterT end, bool test = false) override {
 
             auto i = begin;
             if (!(a_(i, end) && b_(i, end))) {
-                reset();
                 return false;
             }
-            Node<C>::onMatch(begin, i);
+            if (!test) {
+                Node<C>::onMatch(begin, i);
+            }
             begin = i;
             return true;
-        }
-
-        virtual void reset() override {
-            Node<C>::reset();
-            a_.reset();
-            b_.reset();
         }
 
     private:
@@ -303,11 +295,13 @@ namespace parse {
         }
 
         virtual bool operator()(
-                iterT &begin, iterT end) override {
+                iterT &begin, iterT end, bool test = false) override {
 
             if (begin == end) {
                 if (validCount(0)) {
-                    Node<C>::onMatch(begin, begin);
+                    if (!test) {
+                        Node<C>::onMatch(begin, begin);
+                    }
                     return true;
                 }
                 return false;
@@ -316,7 +310,7 @@ namespace parse {
             int count = 0;
             auto i = begin;
 
-            while ((count <= max_ || max_ == Infinity) && n_(i, end)) {
+            while ((count <= max_ || max_ == Infinity) && n_(i, end, true)) {
                 ++count;
             }
 
@@ -331,14 +325,8 @@ namespace parse {
                 return true;
             } else {
                 // Remove any captures.
-                n_.reset();
                 return false;
             }
-        }
-
-        virtual void reset() override {
-            Node<C>::reset();
-            n_.reset();
         }
 
     private:
@@ -374,6 +362,52 @@ namespace parse {
             s = std::move(t);
         });
         return n;
+    }
+    namespace u8 {
+        using node = Node<char>;
+        using stop = Stop<char>;
+        using lc = LitC<char>;
+        using ls = LitS<char>;
+
+        inline lc c(char ch) {
+            return Ch<char>(ch);
+        }
+
+        inline lc cs(std::unordered_set<char> s) {
+            return ChSet<char>(std::move(s));
+        }
+
+        inline lc cr(char a, char b) {
+            return ChRange<char>(a, b);
+        }
+
+        inline lc w() {
+            return Word<char>();
+        }
+
+        inline lc d() {
+            return Digit<char>();
+        }
+
+        inline lc s() {
+            return Space<char>();
+        }
+
+        inline lc any() {
+            return Any<char>();
+        }
+
+        inline lc operator!(const lc& n) {
+            return Not<char>(n);
+        }
+
+        inline ls str(const char* s) {
+            return Str<char>(s);
+        }
+
+        inline ls str(const std::string& s) {
+            return Str<char>(s);
+        }
     }
 }
 
