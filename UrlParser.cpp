@@ -1,5 +1,8 @@
 //
-// Created by Jim on 12/18/2015.
+//  UrlParser.cpp
+//
+//  Created by Jim Park on 12/18/15.
+//  Copyright © 2015 Jim Park. All rights reserved.
 //
 
 #include "UrlParser.h"

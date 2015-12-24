@@ -1,6 +1,5 @@
 //
-//  parse.h
-//  parse
+//  Parse.h
 //
 //  Created by Jim Park on 12/12/15.
 //  Copyright © 2015 Jim Park. All rights reserved.
